@@ -541,8 +541,8 @@ void updateDisplay() {
   switch (currentMode) {
     case MODE_PRESET:    displayPresetMode();                      break;
     case MODE_MANUAL_L:  displayManualMode("L  (P1-P8)",  manualL);  break;
-    case MODE_MANUAL_C1: displayManualMode("C1 (P9-16)", manualC1);  break;
-    case MODE_MANUAL_C2: displayManualMode("C2(P17-24)", manualC2);  break;
+    case MODE_MANUAL_C1: displayManualMode("C1(P17-24)", manualC1);  break;
+    case MODE_MANUAL_C2: displayManualMode("C2 (P9-16)", manualC2);  break;
     case MODE_SWR:       displaySWRMode();                         break;
     case MODE_MEMORY:    displayMemoryMode();                      break;
     case MODE_TEST:      displayTestMode();                        break;
@@ -853,10 +853,14 @@ void quickAction() {
 // ============================================================
 
 void setRelays(uint8_t inductance, uint8_t cap1, uint8_t cap2) {
+  // BU2152FS pinout confirmat din schema ATU-450:
+  // P1-P8  (pin5-12)  = RL6017-6024 = INDUCTANTE  <- ultimul shiftOut
+  // P9-P16 (pin13-20) = RL6009-6016 = CAP2        <- al doilea shiftOut
+  // P17-P24(pin21-28) = RL6001-6008 = CAP1        <- primul shiftOut
   digitalWrite(LE_TU_PIN, LOW);
-  shiftOut(SDATA_PIN, SCLK_PIN, MSBFIRST, cap2);
-  shiftOut(SDATA_PIN, SCLK_PIN, MSBFIRST, cap1);
-  shiftOut(SDATA_PIN, SCLK_PIN, MSBFIRST, inductance);
+  shiftOut(SDATA_PIN, SCLK_PIN, MSBFIRST, cap1);       // -> P17-P24 = RL6001-6008
+  shiftOut(SDATA_PIN, SCLK_PIN, MSBFIRST, cap2);       // -> P9-P16  = RL6009-6016
+  shiftOut(SDATA_PIN, SCLK_PIN, MSBFIRST, inductance); // -> P1-P8   = RL6017-6024
   digitalWrite(LE_TU_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(LE_TU_PIN, LOW);

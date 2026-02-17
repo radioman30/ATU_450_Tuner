@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWR Bridge – ATU-450</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg:       #0a0e12;
+    --panel:    #0f1520;
+    --border:   #1a2a3a;
+    --green:    #00ff88;
+    --cyan:     #00cfff;
+    --amber:    #ffaa00;
+    --red:      #ff4444;
+    --dimgreen: #004422;
+    --text:     #c0d8e8;
+    --dim:      #4a6070;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.07) 2px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  header h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: var(--cyan);
+    letter-spacing: 4px;
+    text-shadow: 0 0 20px rgba(0,207,255,0.5);
+  }
+  header p {
+    color: var(--dim);
+    font-size: 0.78rem;
+    letter-spacing: 2px;
+    margin-top: 4px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 20px;
+    width: 100%;
+    max-width: 1100px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+
+  .card-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    color: var(--dim);
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ──────────── SCHEMATIC SVG ──────────── */
+  #schematic {
+    width: 100%;
+    background: #070c10;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+
+  /* ──────────── SIDE PANEL ──────────── */
+  .side { display: flex; flex-direction: column; gap: 16px; }
+
+  /* BOM Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+  }
+  th {
+    color: var(--cyan);
+    font-size: 0.6rem;
+    letter-spacing: 2px;
+    padding: 4px 6px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 5px 6px;
+    border-bottom: 1px solid rgba(26,42,58,0.6);
+    color: var(--text);
+  }
+  tr:hover td { background: rgba(0,207,255,0.04); }
+  .ref  { color: var(--amber); font-weight: bold; }
+  .val  { color: var(--green); }
+
+  /* Notes */
+  .note {
+    background: rgba(0,255,136,0.04);
+    border-left: 3px solid var(--green);
+    padding: 10px 14px;
+    font-size: 0.72rem;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .note strong { color: var(--green); }
+
+  /* Formula box */
+  .formula {
+    background: rgba(0,207,255,0.05);
+    border: 1px solid rgba(0,207,255,0.2);
+    border-radius: 3px;
+    padding: 12px 14px;
+    font-size: 0.72rem;
+    line-height: 1.9;
+  }
+  .formula .eq { color: var(--cyan); font-size: 0.85rem; }
+  .formula .label { color: var(--dim); font-size: 0.65rem; letter-spacing: 1px; }
+
+  /* Arduino pinout */
+  .pinout {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.72rem;
+  }
+  .pin-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pin-num {
+    background: var(--amber);
+    color: #000;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 2px;
+    min-width: 36px;
+    text-align: center;
+  }
+  .pin-name { color: var(--green); }
+  .pin-desc { color: var(--dim); font-size: 0.65rem; }
+
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SWR BRIDGE MODULE</h1>
+  <p>ATU-450 · ARDUINO MEGA 2560 · DIRECTIONAL COUPLER</p>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT: Schematic -->
+  <div class="card">
+    <div class="card-title">CIRCUIT DIAGRAM — DIRECTIONAL COUPLER + DETECTOR</div>
+
+    <svg id="schematic" viewBox="0 0 760 480" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Glow filters -->
+        <filter id="glow-g">
+          <feGaussianBlur stdDeviation="2.5" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="glow-c">
+          <feGaussianBlur stdDeviation="1.8" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="glow-a">
+          <feGaussianBlur stdDeviation="2" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <!-- Grid pattern -->
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M20 0 L0 0 0 20" fill="none" stroke="#0d1a24" stroke-width="0.5"/>
+        </pattern>
+      </defs>
+
+      <!-- Background grid -->
+      <rect width="760" height="480" fill="#070c10"/>
+      <rect width="760" height="480" fill="url(#grid)"/>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- MAIN RF LINE: RF_IN (left) → RF_OUT (right) -->
+      <!-- ══════════════════════════════════════════ -->
+
+      <!-- RF IN label -->
+      <text x="18" y="178" fill="#00ff88" font-family="Share Tech Mono" font-size="11" filter="url(#glow-g)">RF IN</text>
+      <text x="18" y="192" fill="#4a6070" font-family="Share Tech Mono" font-size="9">TRX</text>
+
+      <!-- Main line left segment -->
+      <line x1="60" y1="183" x2="160" y2="183" stroke="#00ff88" stroke-width="2.5" filter="url(#glow-g)"/>
+
+      <!-- TOROID TRANSFORMER T1 (primary = main line through) -->
+      <!-- Core rectangle -->
+      <rect x="160" y="155" width="120" height="56" rx="4" fill="none" stroke="#1a2a3a" stroke-width="1.5"/>
+      <text x="168" y="150" fill="#4a6070" font-family="Share Tech Mono" font-size="9">T1 — FT37-43</text>
+
+      <!-- Primary winding (main line, 1T) — straight through with bump -->
+      <line x1="160" y1="183" x2="185" y2="183" stroke="#00ff88" stroke-width="2.5" filter="url(#glow-g)"/>
+      <!-- Primary coil bumps -->
+      <path d="M185,183 Q190,170 200,183 Q210,196 220,183 Q230,170 240,183 Q250,196 260,183"
+            fill="none" stroke="#00ff88" stroke-width="2.5" filter="url(#glow-g)"/>
+      <line x1="260" y1="183" x2="280" y2="183" stroke="#00ff88" stroke-width="2.5" filter="url(#glow-g)"/>
+
+      <!-- Secondary winding (FWD, 10T) — upper winding inside core -->
+      <path d="M170,168 Q175,158 182,168 Q189,178 196,168 Q203,158 210,168 Q217,178 224,168 Q231,158 238,168 Q245,178 252,168 Q259,158 266,168 Q273,178 270,168"
+            fill="none" stroke="#00cfff" stroke-width="1.8" filter="url(#glow-c)"/>
+      <!-- Secondary FWD tap points -->
+      <line x1="170" y1="168" x2="170" y2="200" stroke="#00cfff" stroke-width="1.5" stroke-dasharray="3,2" filter="url(#glow-c)"/>
+      <line x1="270" y1="168" x2="270" y2="200" stroke="#00cfff" stroke-width="1.5" stroke-dasharray="3,2" filter="url(#glow-c)"/>
+
+      <!-- Tertiary winding (REV, 10T) — lower winding inside core -->
+      <path d="M170,197 Q175,207 182,197 Q189,187 196,197 Q203,207 210,197 Q217,187 224,197 Q231,207 238,197 Q245,187 252,197 Q259,207 266,197 Q273,187 270,197"
+            fill="none" stroke="#ffaa00" stroke-width="1.8" filter="url(#glow-a)"/>
+      <line x1="170" y1="197" x2="170" y2="216" stroke="#ffaa00" stroke-width="1.5" stroke-dasharray="3,2" filter="url(#glow-a)"/>
+      <line x1="270" y1="197" x2="270" y2="216" stroke="#ffaa00" stroke-width="1.5" stroke-dasharray="3,2" filter="url(#glow-a)"/>
+
+      <!-- T1 winding labels -->
+      <text x="163" y="164" fill="#00cfff" font-family="Share Tech Mono" font-size="8">SEC(FWD)</text>
+      <text x="163" y="215" fill="#ffaa00" font-family="Share Tech Mono" font-size="8">TER(REV)</text>
+      <text x="188" y="193" fill="#4a6070" font-family="Share Tech Mono" font-size="8">PRI 1T</text>
+
+      <!-- Main line right segment -->
+      <line x1="280" y1="183" x2="700" y2="183" stroke="#00ff88" stroke-width="2.5" filter="url(#glow-g)"/>
+
+      <!-- RF OUT label -->
+      <text x="706" y="178" fill="#00ff88" font-family="Share Tech Mono" font-size="11" filter="url(#glow-g)">RF OUT</text>
+      <text x="706" y="192" fill="#4a6070" font-family="Share Tech Mono" font-size="9">ANT</text>
+
+      <!-- Ground rail (main) -->
+      <line x1="30" y1="350" x2="730" y2="350" stroke="#1a2a3a" stroke-width="1.2"/>
+      <text x="340" y="365" fill="#1a2a3a" font-family="Share Tech Mono" font-size="9">GND</text>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- FWD DETECTOR (upper, cyan)                -->
+      <!-- ══════════════════════════════════════════ -->
+
+      <!-- Vertical drop from FWD secondary left tap -->
+      <line x1="170" y1="200" x2="170" y2="265" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+
+      <!-- R1 load resistor (FWD side) -->
+      <line x1="170" y1="265" x2="170" y2="280" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <!-- Resistor body -->
+      <rect x="158" y="280" width="24" height="12" rx="2" fill="#0f1520" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <text x="153" y="292" fill="#00cfff" font-family="Share Tech Mono" font-size="8">R1</text>
+      <text x="148" y="302" fill="#4a6070" font-family="Share Tech Mono" font-size="7.5">50Ω</text>
+      <line x1="170" y1="292" x2="170" y2="310" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <line x1="170" y1="310" x2="170" y2="350" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <!-- GND symbol -->
+      <line x1="160" y1="350" x2="180" y2="350" stroke="#00cfff" stroke-width="1.5"/>
+      <line x1="163" y1="355" x2="177" y2="355" stroke="#00cfff" stroke-width="1.2"/>
+      <line x1="166" y1="360" x2="174" y2="360" stroke="#00cfff" stroke-width="1"/>
+
+      <!-- D1 diode (FWD) - from right tap -->
+      <line x1="270" y1="200" x2="340" y2="200" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <!-- Diode symbol -->
+      <polygon points="340,194 340,206 354,200" fill="#00cfff" filter="url(#glow-c)"/>
+      <line x1="354" y1="194" x2="354" y2="206" stroke="#00cfff" stroke-width="2" filter="url(#glow-c)"/>
+      <text x="342" y="218" fill="#00cfff" font-family="Share Tech Mono" font-size="8">D1</text>
+      <text x="336" y="228" fill="#4a6070" font-family="Share Tech Mono" font-size="7.5">1N5711</text>
+
+      <!-- After diode -->
+      <line x1="354" y1="200" x2="400" y2="200" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+
+      <!-- C1 filter cap (FWD) -->
+      <line x1="400" y1="200" x2="400" y2="220" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <line x1="388" y1="220" x2="412" y2="220" stroke="#00cfff" stroke-width="2" filter="url(#glow-c)"/>
+      <line x1="388" y1="225" x2="412" y2="225" stroke="#00cfff" stroke-width="2" filter="url(#glow-c)"/>
+      <text x="416" y="225" fill="#00cfff" font-family="Share Tech Mono" font-size="8">C1</text>
+      <text x="416" y="235" fill="#4a6070" font-family="Share Tech Mono" font-size="7.5">100nF</text>
+      <line x1="400" y1="225" x2="400" y2="350" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <line x1="394" y1="350" x2="406" y2="350" stroke="#00cfff" stroke-width="1.5"/>
+      <line x1="397" y1="355" x2="403" y2="355" stroke="#00cfff" stroke-width="1.2"/>
+      <line x1="399" y1="360" x2="401" y2="360" stroke="#00cfff" stroke-width="1"/>
+
+      <!-- R2 bleed resistor (FWD) -->
+      <line x1="400" y1="200" x2="440" y2="200" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <line x1="440" y1="200" x2="440" y2="215" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <rect x="428" y="215" width="24" height="12" rx="2" fill="#0f1520" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <text x="466" y="224" fill="#00cfff" font-family="Share Tech Mono" font-size="8">R2 10k</text>
+      <line x1="440" y1="227" x2="440" y2="350" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <line x1="434" y1="350" x2="446" y2="350" stroke="#00cfff" stroke-width="1.5"/>
+      <line x1="437" y1="355" x2="443" y2="355" stroke="#00cfff" stroke-width="1.2"/>
+      <line x1="439" y1="360" x2="441" y2="360" stroke="#00cfff" stroke-width="1"/>
+
+      <!-- FWD output line to ADC -->
+      <line x1="400" y1="200" x2="590" y2="200" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <!-- Series resistor R5 FWD protection -->
+      <line x1="590" y1="200" x2="606" y2="200" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <rect x="606" y="194" width="20" height="12" rx="2" fill="#0f1520" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <text x="603" y="214" fill="#00cfff" font-family="Share Tech Mono" font-size="7.5">R5 1k</text>
+      <line x1="626" y1="200" x2="660" y2="200" stroke="#00cfff" stroke-width="1.5" filter="url(#glow-c)"/>
+      <!-- FWD output node -->
+      <circle cx="660" cy="200" r="4" fill="#00cfff" filter="url(#glow-c)"/>
+      <text x="668" y="197" fill="#00cfff" font-family="Share Tech Mono" font-size="10" font-weight="bold" filter="url(#glow-c)">A0</text>
+      <text x="668" y="209" fill="#4a6070" font-family="Share Tech Mono" font-size="8">FWD</text>
+      <text x="668" y="220" fill="#4a6070" font-family="Share Tech Mono" font-size="7">MEGA PIN</text>
+
+      <!-- FWD label -->
+      <text x="300" y="188" fill="#00cfff" font-family="Share Tech Mono" font-size="9" filter="url(#glow-c)">── FWD CHANNEL ──</text>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- REV DETECTOR (lower, amber)               -->
+      <!-- ══════════════════════════════════════════ -->
+
+      <!-- Vertical from REV tertiary left tap -->
+      <line x1="170" y1="216" x2="170" y2="240" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <line x1="170" y1="240" x2="510" y2="240" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+
+      <!-- D2 diode (REV) -->
+      <line x1="490" y1="240" x2="510" y2="240" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <!-- REV path goes right then D2 -->
+      <polygon points="510,234 510,246 524,240" fill="#ffaa00" filter="url(#glow-a)"/>
+      <line x1="524" y1="234" x2="524" y2="246" stroke="#ffaa00" stroke-width="2" filter="url(#glow-a)"/>
+      <text x="510" y="258" fill="#ffaa00" font-family="Share Tech Mono" font-size="8">D2</text>
+      <text x="504" y="268" fill="#4a6070" font-family="Share Tech Mono" font-size="7.5">1N5711</text>
+
+      <!-- REV tertiary right tap -->
+      <line x1="270" y1="216" x2="270" y2="240" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <!-- R3 REV load -->
+      <line x1="270" y1="240" x2="270" y2="258" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <rect x="258" y="258" width="24" height="12" rx="2" fill="#0f1520" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <text x="247" y="268" fill="#ffaa00" font-family="Share Tech Mono" font-size="8">R3 50Ω</text>
+      <line x1="270" y1="270" x2="270" y2="310" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <line x1="264" y1="310" x2="276" y2="310" stroke="#ffaa00" stroke-width="1.5"/>
+      <line x1="267" y1="315" x2="273" y2="315" stroke="#ffaa00" stroke-width="1.2"/>
+      <line x1="269" y1="320" x2="271" y2="320" stroke="#ffaa00" stroke-width="1"/>
+
+      <!-- After D2 -->
+      <line x1="524" y1="240" x2="560" y2="240" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+
+      <!-- C2 filter cap (REV) -->
+      <line x1="560" y1="240" x2="560" y2="258" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <line x1="548" y1="258" x2="572" y2="258" stroke="#ffaa00" stroke-width="2" filter="url(#glow-a)"/>
+      <line x1="548" y1="263" x2="572" y2="263" stroke="#ffaa00" stroke-width="2" filter="url(#glow-a)"/>
+      <text x="576" y="263" fill="#ffaa00" font-family="Share Tech Mono" font-size="8">C2</text>
+      <text x="576" y="273" fill="#4a6070" font-family="Share Tech Mono" font-size="7.5">100nF</text>
+      <line x1="560" y1="263" x2="560" y2="350" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <line x1="554" y1="350" x2="566" y2="350" stroke="#ffaa00" stroke-width="1.5"/>
+      <line x1="557" y1="355" x2="563" y2="355" stroke="#ffaa00" stroke-width="1.2"/>
+      <line x1="559" y1="360" x2="561" y2="360" stroke="#ffaa00" stroke-width="1"/>
+
+      <!-- R4 bleed (REV) -->
+      <line x1="560" y1="240" x2="595" y2="240" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <line x1="595" y1="240" x2="595" y2="253" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <rect x="583" y="253" width="24" height="12" rx="2" fill="#0f1520" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <text x="610" y="262" fill="#ffaa00" font-family="Share Tech Mono" font-size="8">R4 10k</text>
+      <line x1="595" y1="265" x2="595" y2="350" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <line x1="589" y1="350" x2="601" y2="350" stroke="#ffaa00" stroke-width="1.5"/>
+      <line x1="592" y1="355" x2="598" y2="355" stroke="#ffaa00" stroke-width="1.2"/>
+      <line x1="594" y1="360" x2="596" y2="360" stroke="#ffaa00" stroke-width="1"/>
+
+      <!-- REV output to ADC -->
+      <line x1="560" y1="240" x2="620" y2="240" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <!-- R6 protection -->
+      <rect x="620" y="234" width="20" height="12" rx="2" fill="#0f1520" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <text x="617" y="254" fill="#ffaa00" font-family="Share Tech Mono" font-size="7.5">R6 1k</text>
+      <line x1="640" y1="240" x2="660" y2="240" stroke="#ffaa00" stroke-width="1.5" filter="url(#glow-a)"/>
+      <!-- REV output node -->
+      <circle cx="660" cy="240" r="4" fill="#ffaa00" filter="url(#glow-a)"/>
+      <text x="668" y="237" fill="#ffaa00" font-family="Share Tech Mono" font-size="10" font-weight="bold" filter="url(#glow-a)">A1</text>
+      <text x="668" y="249" fill="#4a6070" font-family="Share Tech Mono" font-size="8">REV</text>
+      <text x="668" y="260" fill="#4a6070" font-family="Share Tech Mono" font-size="7">MEGA PIN</text>
+
+      <!-- REV label -->
+      <text x="300" y="234" fill="#ffaa00" font-family="Share Tech Mono" font-size="9" filter="url(#glow-a)">── REV CHANNEL ──</text>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- ARDUINO MEGA connector block              -->
+      <!-- ══════════════════════════════════════════ -->
+      <rect x="648" y="185" width="80" height="88" rx="3" fill="#0a1218" stroke="#1a2a3a" stroke-width="1.5"/>
+      <text x="651" y="180" fill="#4a6070" font-family="Share Tech Mono" font-size="8">MEGA 2560</text>
+      <!-- Connector pins visual -->
+      <rect x="744" y="194" width="6" height="6" rx="1" fill="#1a2a3a"/>
+      <rect x="744" y="234" width="6" height="6" rx="1" fill="#1a2a3a"/>
+      <text x="652" y="285" fill="#4a6070" font-family="Share Tech Mono" font-size="7">ANALOG IN</text>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- BYPASS CAP on RF line                     -->
+      <!-- ══════════════════════════════════════════ -->
+      <line x1="480" y1="183" x2="480" y2="198" stroke="#00ff88" stroke-width="1.5" filter="url(#glow-g)"/>
+      <line x1="468" y1="198" x2="492" y2="198" stroke="#00ff88" stroke-width="2" filter="url(#glow-g)"/>
+      <line x1="468" y1="203" x2="492" y2="203" stroke="#00ff88" stroke-width="2" filter="url(#glow-g)"/>
+      <line x1="480" y1="203" x2="480" y2="350" stroke="#00ff88" stroke-width="1.5" filter="url(#glow-g)"/>
+      <text x="494" y="202" fill="#00ff88" font-family="Share Tech Mono" font-size="8">C3</text>
+      <text x="494" y="212" fill="#4a6070" font-family="Share Tech Mono" font-size="7.5">100pF</text>
+      <!-- Node dot on main line -->
+      <circle cx="480" cy="183" r="3" fill="#00ff88" filter="url(#glow-g)"/>
+
+      <!-- ══════════════════════════════════════════ -->
+      <!-- TITLE block corner                        -->
+      <!-- ══════════════════════════════════════════ -->
+      <rect x="10" y="400" width="740" height="68" fill="none" stroke="#1a2a3a" stroke-width="1"/>
+      <line x1="10" y1="418" x2="750" y2="418" stroke="#1a2a3a" stroke-width="0.8"/>
+      <line x1="200" y1="418" x2="200" y2="468" stroke="#1a2a3a" stroke-width="0.8"/>
+      <line x1="500" y1="418" x2="500" y2="468" stroke="#1a2a3a" stroke-width="0.8"/>
+
+      <text x="16" y="413" fill="#4a6070" font-family="Share Tech Mono" font-size="8">TITLU</text>
+      <text x="16" y="435" fill="#00cfff" font-family="Orbitron" font-size="10" font-weight="700">SWR BRIDGE MODULE</text>
+      <text x="16" y="450" fill="#4a6070" font-family="Share Tech Mono" font-size="8">Directional Coupler — Detector</text>
+      <text x="16" y="462" fill="#4a6070" font-family="Share Tech Mono" font-size="8">ATU-450 / Mega 2560</text>
+
+      <text x="206" y="413" fill="#4a6070" font-family="Share Tech Mono" font-size="8">NOTA</text>
+      <text x="206" y="432" fill="#c0d8e8" font-family="Share Tech Mono" font-size="8">D1, D2: Schottky detector</text>
+      <text x="206" y="444" fill="#c0d8e8" font-family="Share Tech Mono" font-size="8">R1=R3: matched 50Ω ±1%</text>
+      <text x="206" y="456" fill="#c0d8e8" font-family="Share Tech Mono" font-size="8">T1: FT37-43, pri=1T, sec/ter=10T</text>
+      <text x="206" y="468" fill="#c0d8e8" font-family="Share Tech Mono" font-size="8">C1=C2: 100nF ceramic SMD</text>
+
+      <text x="506" y="413" fill="#4a6070" font-family="Share Tech Mono" font-size="8">VERSION</text>
+      <text x="506" y="432" fill="#c0d8e8" font-family="Share Tech Mono" font-size="8">Rev: v1.0</text>
+      <text x="506" y="444" fill="#c0d8e8" font-family="Share Tech Mono" font-size="8">Data: 2025</text>
+      <text x="506" y="456" fill="#00ff88" font-family="Share Tech Mono" font-size="8">Banda: 1.8 – 54 MHz</text>
+      <text x="506" y="468" fill="#00ff88" font-family="Share Tech Mono" font-size="8">Putere max: 100W PEP</text>
+    </svg>
+  </div>
+
+  <!-- RIGHT: Info panel -->
+  <div class="side">
+
+    <!-- BOM -->
+    <div class="card">
+      <div class="card-title">LISTA COMPONENTE (BOM)</div>
+      <table>
+        <thead>
+          <tr><th>REF</th><th>VALOARE</th><th>DESCRIERE</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="ref">T1</td><td class="val">FT37-43</td><td>Toroid binocular</td></tr>
+          <tr><td class="ref">D1,D2</td><td class="val">1N5711</td><td>Schottky detector</td></tr>
+          <tr><td class="ref">R1,R3</td><td class="val">50Ω 1%</td><td>Rezistenta sarcina</td></tr>
+          <tr><td class="ref">R2,R4</td><td class="val">10kΩ</td><td>Bleed resistor</td></tr>
+          <tr><td class="ref">R5,R6</td><td class="val">1kΩ</td><td>Protectie ADC</td></tr>
+          <tr><td class="ref">C1,C2</td><td class="val">100nF</td><td>Filtru detector</td></tr>
+          <tr><td class="ref">C3</td><td class="val">100pF</td><td>Bypass RF line</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Formula -->
+    <div class="card">
+      <div class="card-title">FORMULE SWR</div>
+      <div class="formula">
+        <div class="label">COEFICIENT REFLEXIE</div>
+        <div class="eq">Γ = V_REV / V_FWD</div>
+        <br>
+        <div class="label">SWR</div>
+        <div class="eq">SWR = (1 + Γ) / (1 − Γ)</div>
+        <br>
+        <div class="label">PUTERE REFLECTATA %</div>
+        <div class="eq">ρ = Γ² × 100%</div>
+        <br>
+        <div class="label">IN COD (Arduino)</div>
+        <div class="eq">gamma = revRaw / fwdRaw</div>
+        <div class="eq">swr = (1+gamma)/(1-gamma)</div>
+      </div>
+    </div>
+
+    <!-- Pinout -->
+    <div class="card">
+      <div class="card-title">CONECTARE MEGA 2560</div>
+      <div class="pinout">
+        <div class="pin-row">
+          <span class="pin-num">A0</span>
+          <span class="pin-name">FWD</span>
+          <span class="pin-desc">putere directa</span>
+        </div>
+        <div class="pin-row">
+          <span class="pin-num">A1</span>
+          <span class="pin-name">REV</span>
+          <span class="pin-desc">putere reflectata</span>
+        </div>
+        <div class="pin-row">
+          <span class="pin-num">GND</span>
+          <span class="pin-name">GND</span>
+          <span class="pin-desc">masa comuna</span>
+        </div>
+        <div class="pin-row">
+          <span class="pin-num">5V</span>
+          <span class="pin-name">—</span>
+          <span class="pin-desc">nu e necesar</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="card">
+      <div class="card-title">NOTE CONSTRUCTIE</div>
+      <div class="note">
+        <strong>T1:</strong> Toroid FT37-43 (material 43, HF)<br>
+        Primar: <strong>1 tură</strong> conductor 1mm prin miez<br>
+        Secundar (FWD): <strong>10 ture</strong> AWG26 bifilare<br>
+        Terțiar (REV): <strong>10 ture</strong> AWG26 bifilare<br><br>
+        <strong>D1/D2</strong> trebuie să fie <strong>pereche</strong> — aceeasi productie lot.<br><br>
+        <strong>R1=R3</strong> trebuie <strong>1%</strong> sau mai bun pentru balanta.<br><br>
+        Montaj cat mai <strong>compact</strong>, fire scurte, GND plan.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
